@@ -60,7 +60,7 @@ configure_netatalk() {
     local hdd_name="$1"
     local logged_user
     logged_user=$(logname)
-    log_debug "Configuring netatalk with HDD name ${hdd_name} and default user ${default_user}"
+    log_debug "Configuring netatalk with HDD name ${hdd_name} and default user ${logged_user}"
     sudo bash -c "cat > /etc/netatalk/afp.conf <<EOF
 [PiCapsule]
 path = /media/${logged_user}/${hdd_name}
