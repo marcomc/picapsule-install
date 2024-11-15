@@ -3,6 +3,12 @@
 set -euo pipefail
 
 DEBUG=false
+logged_user=$(logname)
+device="sda1"
+hdd_name="picapsule"
+mount_point="/media/${logged_user}/${hdd_name}"
+user_uid=$(id -u "${logged_user}")
+user_gid=$(id -g "${logged_user}")
 
 print_usage() {
     echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
@@ -22,7 +28,6 @@ log_debug() {
 }
 
 check_device() {
-    local device="$1"
     log_debug "Checking if device ${device} is recognized by the operating system"
     if [[ ! -b "/dev/${device}" ]]; then
         echo "Error: Device /dev/${device} is not recognized by the operating system." >&2
@@ -49,30 +54,7 @@ install_utilities() {
     fi
 }
 
-create_udev_rule() {
-    local device="$1"
-    local logged_user
-    logged_user=$(logname)
-    local uid
-    uid=$(id -u "${logged_user}")
-    local gid
-    gid=$(id -g "${logged_user}")
-    
-    log_debug "Creating udev rule for automounting device ${device} as user ${logged_user} (UID: ${uid}, GID: ${gid})"
-    if ! grep -q "udisksctl mount" /etc/udev/rules.d/99-automount.rules 2>/dev/null; then
-        sudo bash -c "cat > /etc/udev/rules.d/99-automount.rules <<EOF
-ACTION==\"add\", SUBSYSTEMS==\"usb\", KERNEL==\"sd[a-z][0-9]\", RUN+=\"/usr/bin/udisksctl mount -b /dev/${device} --no-user-interaction --options uid=${uid},gid=${gid}\"
-ACTION==\"remove\", SUBSYSTEMS==\"usb\", KERNEL==\"sd[a-z][0-9]\", RUN+=\"/usr/bin/udisksctl unmount -b /dev/${device}\"
-EOF"
-        sudo udevadm control --reload-rules
-        sudo udevadm trigger
-    else
-        log_debug "Udev rule for automounting USB devices already exists"
-    fi
-}
-
 format_hdd_exfat() {
-    local device="$1"
     log_debug "Formatting HDD with exFAT on ${device}"
     if ! sudo blkid "/dev/${device}" | grep -q exfat; then
         sudo mkfs.exfat "/dev/${device}"
@@ -81,10 +63,29 @@ format_hdd_exfat() {
     fi
 }
 
+configure_automount() {
+    log_debug "Configuring automount for device ${device} at ${mount_point}"
+
+    if ! grep -q "/dev/${device}" /etc/fstab; then
+        sudo mkdir -p "${mount_point}"
+        sudo chown "${logged_user}:${logged_user}" "${mount_point}"
+        echo "/dev/${device} ${mount_point} exfat defaults,uid=${user_uid},gid=${user_gid} 0 0" | sudo tee -a /etc/fstab
+    else
+        log_debug "Device ${device} is already configured in /etc/fstab"
+    fi
+}
+
+mount_device() {
+    log_debug "Mounting device using fstab configuration at ${mount_point}"
+
+    if ! mountpoint -q "${mount_point}"; then
+        sudo mount "${mount_point}"
+    else
+        log_debug "Device is already mounted at ${mount_point}"
+    fi
+}
+
 configure_netatalk() {
-    local hdd_name="$1"
-    local logged_user
-    logged_user=$(logname)
     log_debug "Configuring netatalk with HDD name ${hdd_name} and default user ${logged_user}"
     if ! grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
         sudo bash -c "cat > /etc/netatalk/afp.conf <<EOF
@@ -146,8 +147,6 @@ uninstall() {
 }
 
 main() {
-    local device="sda1"
-    local hdd_name="picapsule"
     local uninstall_mode=false
 
     while [[ $# -gt 0 ]]; do
@@ -166,6 +165,7 @@ main() {
             --hdd-name)
                 shift
                 hdd_name="$1"
+                mount_point="/media/${logged_user}/${hdd_name}"
                 ;;
             --uninstall)
                 uninstall_mode=true
@@ -184,13 +184,15 @@ main() {
         exit 0
     fi
 
-    check_device "${device}"
+    check_device
     check_dependencies
     install_utilities
-    create_udev_rule "${device}"
-    format_hdd_exfat "${device}"
-    configure_netatalk "${hdd_name}"
+    format_hdd_exfat
+    configure_automount
+    mount_device
+    configure_netatalk
     enable_restart_script
+    
 }
 
 main "$@"
