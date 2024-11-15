@@ -50,12 +50,19 @@ install_utilities() {
 }
 
 create_udev_rule() {
-    log_debug "Creating udev rule for automounting USB devices"
+    local logged_user
+    logged_user=$(logname)
+    local uid
+    uid=$(id -u "${logged_user}")
+    local gid
+    gid=$(id -g "${logged_user}")
+    
+    log_debug "Creating udev rule for automounting USB devices as user ${logged_user} (UID: ${uid}, GID: ${gid})"
     if ! grep -q "udisksctl mount" /etc/udev/rules.d/99-automount.rules 2>/dev/null; then
-        sudo bash -c 'cat > /etc/udev/rules.d/99-automount.rules <<EOF
-ACTION=="add", SUBSYSTEMS=="usb", KERNEL=="sd[a-z][0-9]", RUN+="/usr/bin/udisksctl mount -b /dev/%k"
-ACTION=="remove", SUBSYSTEMS=="usb", KERNEL=="sd[a-z][0-9]", RUN+="/usr/bin/udisksctl unmount -b /dev/%k"
-EOF'
+        sudo bash -c "cat > /etc/udev/rules.d/99-automount.rules <<EOF
+ACTION==\"add\", SUBSYSTEMS==\"usb\", KERNEL==\"sd[a-z][0-9]\", RUN+=\"/usr/bin/udisksctl mount -b /dev/%k --no-user-interaction --options uid=${uid},gid=${gid}\"
+ACTION==\"remove\", SUBSYSTEMS==\"usb\", KERNEL==\"sd[a-z][0-9]\", RUN+=\"/usr/bin/udisksctl unmount -b /dev/%k\"
+EOF"
         sudo udevadm control --reload-rules
         sudo udevadm trigger
     else
