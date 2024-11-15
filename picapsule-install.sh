@@ -41,13 +41,21 @@ check_dependencies() {
 
 install_utilities() {
     log_debug "Installing required utilities"
-    sudo apt-get install -y exfat-fuse exfat-utils netatalk
+    if ! dpkg -s exfat-fuse exfat-utils netatalk &> /dev/null; then
+        sudo apt-get install -y exfat-fuse exfat-utils netatalk
+    else
+        log_debug "Required utilities are already installed"
+    fi
 }
 
 format_hdd_exfat() {
     local device="$1"
     log_debug "Formatting HDD with exFAT on ${device}"
-    sudo mkfs.exfat "/dev/${device}"
+    if ! sudo blkid "/dev/${device}" | grep -q exfat; then
+        sudo mkfs.exfat "/dev/${device}"
+    else
+        log_debug "HDD is already formatted with exFAT"
+    fi
 }
 
 configure_netatalk() {
@@ -55,18 +63,23 @@ configure_netatalk() {
     local logged_user
     logged_user=$(logname)
     log_debug "Configuring netatalk with HDD name ${hdd_name} and default user ${logged_user}"
-    sudo bash -c "cat > /etc/netatalk/afp.conf <<EOF
+    if ! grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
+        sudo bash -c "cat > /etc/netatalk/afp.conf <<EOF
 [PiCapsule]
 path = /media/${logged_user}/${hdd_name}
 time machine = yes
 valid users = @users 
 unix priv = no
 EOF"
+    else
+        log_debug "Netatalk is already configured"
+    fi
 }
 
 enable_restart_script() {
     log_debug "Creating restart-netatalk.service file"
-    sudo bash -c 'cat > /etc/systemd/system/restart-netatalk.service <<EOF
+    if ! sudo systemctl is-enabled restart-netatalk.service &> /dev/null; then
+        sudo bash -c 'cat > /etc/systemd/system/restart-netatalk.service <<EOF
 [Unit]
 Description=Restart Netatalk Service
 After=multi-user.target
@@ -78,8 +91,11 @@ ExecStart=/bin/bash -c "sleep 10; echo \"restart netatalk service\"; sudo servic
 [Install]
 WantedBy=multi-user.target
 EOF'
-    sudo systemctl enable restart-netatalk.service --now
-    sudo systemctl daemon-reload
+        sudo systemctl enable restart-netatalk.service --now
+        sudo systemctl daemon-reload
+    else
+        log_debug "restart-netatalk.service is already enabled"
+    fi
 
     log_debug "Confirming if restart-netatalk.service is restarting the netatalk service"
     sudo systemctl status restart-netatalk.service
