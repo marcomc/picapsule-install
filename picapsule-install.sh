@@ -5,12 +5,13 @@ set -euo pipefail
 DEBUG=false
 
 print_usage() {
-    echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>]"
+    echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
     echo "Options:"
     echo "  -h, --help    Show this help message and exit"
     echo "  --debug       Enable debug mode"
     echo "  --device      Specify the device to format (default: sda1)"
     echo "  --hdd-name    Specify the HDD name (default: picapsule)"
+    echo "  --uninstall   Uninstall and remove all configurations"
 }
 
 log_debug() {
@@ -101,9 +102,31 @@ EOF'
     sudo systemctl status restart-netatalk.service
 }
 
+uninstall() {
+    log_debug "Disabling and removing restart-netatalk.service"
+    if sudo systemctl is-enabled restart-netatalk.service &> /dev/null; then
+        sudo systemctl disable restart-netatalk.service --now
+        sudo rm /etc/systemd/system/restart-netatalk.service
+        sudo systemctl daemon-reload
+    else
+        log_debug "restart-netatalk.service is not enabled"
+    fi
+
+    log_debug "Removing netatalk configuration"
+    if grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
+        sudo sed -i '/\[PiCapsule\]/,/^$/d' /etc/netatalk/afp.conf
+    else
+        log_debug "Netatalk configuration for PiCapsule not found"
+    fi
+
+    log_debug "Uninstalling utilities"
+    sudo apt-get remove --purge -y exfat-fuse exfat-utils netatalk
+}
+
 main() {
     local device="sda1"
     local hdd_name="picapsule"
+    local uninstall_mode=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -122,6 +145,9 @@ main() {
                 shift
                 hdd_name="$1"
                 ;;
+            --uninstall)
+                uninstall_mode=true
+                ;;
             *)
                 echo "Unknown option: $1" >&2
                 print_usage
@@ -130,6 +156,11 @@ main() {
         esac
         shift
     done
+
+    if [[ "${uninstall_mode}" == "true" ]]; then
+        uninstall
+        exit 0
+    fi
 
     check_device "${device}"
     check_dependencies
