@@ -49,6 +49,20 @@ install_utilities() {
     fi
 }
 
+create_udev_rule() {
+    log_debug "Creating udev rule for automounting USB devices"
+    if ! grep -q "udisksctl mount" /etc/udev/rules.d/99-automount.rules 2>/dev/null; then
+        sudo bash -c 'cat > /etc/udev/rules.d/99-automount.rules <<EOF
+ACTION=="add", SUBSYSTEMS=="usb", KERNEL=="sd[a-z][0-9]", RUN+="/usr/bin/udisksctl mount -b /dev/%k"
+ACTION=="remove", SUBSYSTEMS=="usb", KERNEL=="sd[a-z][0-9]", RUN+="/usr/bin/udisksctl unmount -b /dev/%k"
+EOF'
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+    else
+        log_debug "Udev rule for automounting USB devices already exists"
+    fi
+}
+
 format_hdd_exfat() {
     local device="$1"
     log_debug "Formatting HDD with exFAT on ${device}"
@@ -165,6 +179,7 @@ main() {
     check_device "${device}"
     check_dependencies
     install_utilities
+    create_udev_rule
     format_hdd_exfat "${device}"
     configure_netatalk "${hdd_name}"
     enable_restart_script
