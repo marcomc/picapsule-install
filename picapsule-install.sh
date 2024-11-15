@@ -39,12 +39,6 @@ check_dependencies() {
     done
 }
 
-update_dependencies() {
-    log_debug "Updating dependencies"
-    sudo apt-get update
-    sudo apt-get upgrade -y
-}
-
 install_utilities() {
     log_debug "Installing required utilities"
     sudo apt-get install -y exfat-fuse exfat-utils netatalk
@@ -123,7 +117,6 @@ main() {
 
     check_device "${device}"
     check_dependencies
-    update_dependencies
     install_utilities
     format_hdd_exfat "${device}"
     configure_netatalk "${hdd_name}"

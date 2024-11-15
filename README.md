@@ -2,6 +2,15 @@
 
 This README file explains what the `picapsule-install.sh` script does and how to use it.
 
+## Pre-requisites
+
+Before running the script, update your system dependencies using the following commands:
+
+```sh
+sudo apt-get update
+sudo apt-get upgrade -y
+```
+
 ## Download and Execute Script
 
 To download and execute the `picapsule-install.sh` script directly from GitHub, use the following command:
