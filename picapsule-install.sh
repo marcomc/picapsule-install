@@ -3,7 +3,6 @@
 set -euo pipefail
 
 DEBUG=false
-logged_user=$(logname)
 
 print_usage() {
     echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
@@ -52,6 +51,8 @@ install_utilities() {
 
 create_udev_rule() {
     local device="$1"
+    local logged_user
+    logged_user=$(logname)
     local uid
     uid=$(id -u "${logged_user}")
     local gid
@@ -60,8 +61,8 @@ create_udev_rule() {
     log_debug "Creating udev rule for automounting device ${device} as user ${logged_user} (UID: ${uid}, GID: ${gid})"
     if ! grep -q "udisksctl mount" /etc/udev/rules.d/99-automount.rules 2>/dev/null; then
         sudo bash -c "cat > /etc/udev/rules.d/99-automount.rules <<EOF
-ACTION==\"add\", SUBSYSTEMS==\"usb\", KERNEL==\"${device}\", RUN+=\"/usr/bin/udisksctl mount -b /dev/%k --no-user-interaction --options uid=${uid},gid=${gid}\"
-ACTION==\"remove\", SUBSYSTEMS==\"usb\", KERNEL==\"${device}\", RUN+=\"/usr/bin/udisksctl unmount -b /dev/%k\"
+ACTION==\"add\", SUBSYSTEMS==\"usb\", KERNEL==\"sd[a-z][0-9]\", RUN+=\"/usr/bin/udisksctl mount -b /dev/${device} --no-user-interaction --options uid=${uid},gid=${gid}\"
+ACTION==\"remove\", SUBSYSTEMS==\"usb\", KERNEL==\"sd[a-z][0-9]\", RUN+=\"/usr/bin/udisksctl unmount -b /dev/${device}\"
 EOF"
         sudo udevadm control --reload-rules
         sudo udevadm trigger
@@ -82,6 +83,8 @@ format_hdd_exfat() {
 
 configure_netatalk() {
     local hdd_name="$1"
+    local logged_user
+    logged_user=$(logname)
     log_debug "Configuring netatalk with HDD name ${hdd_name} and default user ${logged_user}"
     if ! grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
         sudo bash -c "cat > /etc/netatalk/afp.conf <<EOF
