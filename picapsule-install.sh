@@ -31,7 +31,7 @@ check_device() {
 }
 
 check_dependencies() {
-    local dependencies=("apt-get" "mkfs.exfat" "service" "systemctl" "ps" "df" "mount")
+    local dependencies=("apt-get" "service" "systemctl" "ps" "df" "mount")
     for dep in "${dependencies[@]}"; do
         if ! command -v "${dep}" &> /dev/null; then
             echo "Error: ${dep} is not installed." >&2
