@@ -70,24 +70,6 @@ unix priv = no
 EOF"
 }
 
-restart_netatalk() {
-    log_debug "Restarting netatalk"
-    sudo service netatalk restart
-}
-
-reboot_pi() {
-    log_debug "Rebooting Raspberry Pi"
-    sudo reboot
-}
-
-test_service_and_drive() {
-    local hdd_name="$1"
-    log_debug "Testing service and drive mount for ${hdd_name}"
-    pgrep netatalk
-    df "/${hdd_name}"
-    mount | grep "/${hdd_name}"
-}
-
 enable_restart_script() {
     log_debug "Creating restart-netatalk.service file"
     sudo bash -c 'cat > /etc/systemd/system/restart-netatalk.service <<EOF
@@ -104,6 +86,9 @@ WantedBy=multi-user.target
 EOF'
     sudo systemctl enable restart-netatalk.service --now
     sudo systemctl daemon-reload
+
+    log_debug "Confirming if restart-netatalk.service is restarting the netatalk service"
+    sudo systemctl status restart-netatalk.service
 }
 
 main() {
@@ -142,9 +127,6 @@ main() {
     install_utilities
     format_hdd_exfat "${device}"
     configure_netatalk "${hdd_name}"
-    restart_netatalk
-    reboot_pi
-    test_service_and_drive "${hdd_name}"
     enable_restart_script
 }
 

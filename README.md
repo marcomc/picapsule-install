@@ -2,6 +2,16 @@
 
 This README file explains what the `picapsule-install.sh` script does and how to use it.
 
+## Download and Execute Script
+
+To download and execute the `picapsule-install.sh` script directly from GitHub, use the following command:
+
+```sh
+curl -o picapsule-install.sh https://raw.githubusercontent.com/marcomc/picapsule-install/main/picapsule-install.sh
+chmod +x picapsule-install.sh
+sudo ./picapsule-install.sh
+```
+
 ## Options
 
 - `-h, --help`: Show the help message and exit.
@@ -13,7 +23,6 @@ This README file explains what the `picapsule-install.sh` script does and how to
 
 To run the script with a specific device and HDD name:
 
-```sh
 ```sh
 sudo ./picapsule-install.sh [--device sda1] [--hdd-name my_drive]
 ```
@@ -40,17 +49,24 @@ sudo ./picapsule-install.sh [--device sda1] [--hdd-name my_drive]
 6. **Configure Netatalk**  
     The script configures Netatalk to use the specified HDD for Time Machine backups. It creates the `/etc/netatalk/afp.conf` file with the appropriate configuration.
 
-7. **Restart Netatalk**  
-    The script restarts the Netatalk service using `sudo service netatalk restart`.
+7. **Enable Restart Script**  
+    The script creates and enables a systemd service to restart Netatalk after boot. The service file is created at `/etc/systemd/system/restart-netatalk.service` and is enabled using `sudo systemctl enable restart-netatalk.service --now` and `sudo systemctl daemon-reload`. The script also confirms if `restart-netatalk.service` is restarting the Netatalk service.
 
-8. **Reboot Raspberry Pi**  
-    The script reboots the Raspberry Pi using `sudo reboot`.
+## Post-Install Steps
 
-9. **Test Service and Drive Mount**  
-    The script tests the Netatalk service and drive mount using `pgrep netatalk`, `df /<hdd_name>`, and `mount | grep /<hdd_name>`.
+1. **Reboot Raspberry Pi**  
+    Manually reboot the Raspberry Pi using the following command:
+    ```sh
+    sudo reboot
+    ```
 
-10. **Enable Restart Script**  
-     The script creates and enables a systemd service to restart Netatalk after boot. The service file is created at `/etc/systemd/system/restart-netatalk.service` and is enabled using `sudo systemctl enable restart-netatalk.service --now` and `sudo systemctl daemon-reload`.
+2. **Test Service and Drive Mount**  
+    After the reboot, manually test the Netatalk service and drive mount using the following commands:
+    ```sh
+    pgrep netatalk
+    df /<hdd_name>
+    mount | grep /<hdd_name>
+    ```
 
 ## Notes
 
