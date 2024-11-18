@@ -23,8 +23,19 @@ print_usage() {
 
 log_verbose() {
     local message="$1"
+    local status="${2:-}"
+    local symbol="[ ]"
+    local color=""
+
     if [[ "${VERBOSE}" == "true" ]]; then
-        echo "VERBOSE: ${message}" >&2
+        if [[ "${status}" == "success" ]]; then
+            symbol="[✔]"
+            color="\e[32m"  # Green
+        elif [[ "${status}" == "fail" ]]; then
+            symbol="[✘]"
+            color="\e[31m"  # Red
+        fi
+        echo -e "${color}${symbol} ${message}\e[0m"
     fi
 }
 
@@ -34,8 +45,9 @@ create_picapsule_user() {
         log_verbose "Creating user 'picapsule' with password 'changeme'"
         useradd -m picapsule
         echo "picapsule:${picapsule_pwd}" | chpasswd
+        log_verbose "User 'picapsule' created successfully" "success"
     else
-        log_verbose "User 'picapsule' already exists"
+        log_verbose "User 'picapsule' already exists" "success"
     fi
 
     picapsule_uid=$(id -u picapsule)
@@ -43,6 +55,7 @@ create_picapsule_user() {
 
     log_verbose "Adding logged user '${logged_user}' to 'picapsule' group"
     usermod -aG picapsule "${logged_user}"
+    log_verbose "User '${logged_user}' added to 'picapsule' group successfully" "success"
 }
 
 check_device() {
@@ -244,6 +257,7 @@ main() {
 
     if [[ "${uninstall_mode}" == "true" ]]; then
         uninstall
+        log_verbose "Uninstallation completed successfully" "success"
         exit 0
     fi
 
@@ -256,6 +270,8 @@ main() {
     mount_device
     configure_netatalk
     enable_restart_script
+
+    log_verbose "Installation completed successfully" "success"
 }
 
 main "$@"
