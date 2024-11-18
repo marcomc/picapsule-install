@@ -7,8 +7,6 @@ logged_user=$(logname)
 device="sda1"
 hdd_name="picapsule"
 mount_point="/media/${logged_user}/${hdd_name}"
-user_uid=$(id -u "${logged_user}")
-user_gid=$(id -g "${logged_user}")
 
 print_usage() {
     echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
@@ -66,62 +64,95 @@ format_hdd_exfat() {
 configure_automount() {
     log_debug "Configuring automount for device ${device} at ${mount_point}"
 
-    if ! grep -q "/dev/${device}" /etc/fstab; then
-        sudo mkdir -p "${mount_point}"
-        sudo chown "${logged_user}:${logged_user}" "${mount_point}"
-        echo "/dev/${device} ${mount_point} exfat defaults,uid=${user_uid},gid=${user_gid} 0 0" | sudo tee -a /etc/fstab
+    local fstab_entry
+    fstab_entry="/dev/${device} ${mount_point} exfat defaults,uid=$(id -u picapsule),gid=$(id -g picapsule),umask=002 0 0"
+    if grep -q "/dev/${device}" /etc/fstab; then
+        sudo sed -i "\|/dev/${device}|c\\${fstab_entry}" /etc/fstab
+        log_debug "Updated existing fstab entry for device ${device}"
     else
-        log_debug "Device ${device} is already configured in /etc/fstab"
+        echo "${fstab_entry}" | sudo tee -a /etc/fstab
+        log_debug "Added new fstab entry for device ${device}"
     fi
+
+    sudo mkdir -p "${mount_point}"
+    sudo chown "picapsule:picapsule" "${mount_point}"
+    sudo chmod 775 "${mount_point}"
 }
 
 mount_device() {
     log_debug "Mounting device using fstab configuration at ${mount_point}"
 
-    if ! mountpoint -q "${mount_point}"; then
-        sudo mount "${mount_point}"
-    else
-        log_debug "Device is already mounted at ${mount_point}"
+    if mountpoint -q "${mount_point}"; then
+        log_debug "Device is already mounted at ${mount_point}, unmounting first"
+        sudo umount "${mount_point}"
     fi
+
+    if [[ ! -d "${mount_point}" ]]; then
+        log_debug "Creating mount point directory at ${mount_point}"
+        sudo mkdir -p "${mount_point}"
+    else
+        log_debug "Mount point directory already exists at ${mount_point}"
+    fi
+
+    sudo chown "picapsule:picapsule" "${mount_point}"
+    sudo chmod 775 "${mount_point}"
+
+    log_debug "Mounting device at ${mount_point}"
+    sudo mount "${mount_point}"
 }
 
 configure_netatalk() {
     log_debug "Configuring netatalk with HDD name ${hdd_name} and default user ${logged_user}"
-    if ! grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
-        sudo bash -c "cat > /etc/netatalk/afp.conf <<EOF
-[PiCapsule]
+
+    local afp_conf_content="[PiCapsule]
 path = /media/${logged_user}/${hdd_name}
 time machine = yes
-valid users = @users 
+valid users = @picapsule
 unix priv = no
-EOF"
+file perm = 0775
+directory perm = 0775"
+
+    if grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
+        sudo sed -i "/\[PiCapsule\]/,/^\s*\[/{//!d;}" /etc/netatalk/afp.conf
+        sudo sed -i "/\[PiCapsule\]/r /dev/stdin" /etc/netatalk/afp.conf <<< "${afp_conf_content}"
+        log_debug "Updated existing netatalk configuration for PiCapsule"
     else
-        log_debug "Netatalk is already configured"
+        echo "${afp_conf_content}" | sudo tee -a /etc/netatalk/afp.conf
+        log_debug "Added new netatalk configuration for PiCapsule"
     fi
 }
 
 enable_restart_script() {
     log_debug "Creating restart-netatalk.service file"
-    if ! sudo systemctl is-enabled restart-netatalk.service &> /dev/null; then
-        sudo bash -c 'cat > /etc/systemd/system/restart-netatalk.service <<EOF
-[Unit]
+
+    local service_content="[Unit]
 Description=Restart Netatalk Service
 After=multi-user.target
 
 [Service]
 Type=idle
-ExecStart=/bin/bash -c "sleep 10; echo \"restart netatalk service\"; sudo service netatalk restart"
+ExecStart=/bin/bash -c \"sleep 10; echo 'restart netatalk service'; sudo service netatalk restart\"
 
 [Install]
-WantedBy=multi-user.target
-EOF'
-        sudo systemctl enable restart-netatalk.service --now
-        sudo systemctl daemon-reload
-    else
-        log_debug "restart-netatalk.service is already enabled"
-    fi
+WantedBy=multi-user.target"
 
+    echo "${service_content}" | sudo tee /etc/systemd/system/restart-netatalk.service
+    sudo systemctl enable restart-netatalk.service --now
+    sudo systemctl daemon-reload
+    log_debug "Enabled and started restart-netatalk.service"
+
+    if sudo systemctl is-active --quiet restart-netatalk.service; then
+        log_debug "restart-netatalk.service is already running, restarting it"
+        sudo systemctl restart restart-netatalk.service
+    else
+        log_debug "restart-netatalk.service is not running, starting it"
+        sudo systemctl start restart-netatalk.service
+    fi
     log_debug "Confirming if restart-netatalk.service is restarting the netatalk service"
+    if ! sudo systemctl is-active --quiet restart-netatalk.service; then
+        log_debug "restart-netatalk.service is not active, waiting for it to start"
+        sleep 10
+    fi
     sudo systemctl status restart-netatalk.service
 }
 
@@ -144,6 +175,20 @@ uninstall() {
 
     log_debug "Uninstalling utilities"
     sudo apt-get remove --purge -y exfat-fuse exfat-utils netatalk
+}
+
+create_user() {
+    log_debug "Checking if user 'picapsule' exists"
+    if ! id -u picapsule &>/dev/null; then
+        log_debug "Creating user 'picapsule' with password 'changeme'"
+        sudo useradd -m picapsule
+        echo "picapsule:changeme" | sudo chpasswd
+    else
+        log_debug "User 'picapsule' already exists"
+    fi
+
+    log_debug "Adding logged user '${logged_user}' to 'picapsule' group"
+    sudo usermod -aG picapsule "${logged_user}"
 }
 
 main() {
@@ -184,6 +229,7 @@ main() {
         exit 0
     fi
 
+    create_user
     check_device
     check_dependencies
     install_utilities
@@ -192,7 +238,6 @@ main() {
     mount_device
     configure_netatalk
     enable_restart_script
-    
 }
 
 main "$@"
