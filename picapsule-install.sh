@@ -6,7 +6,7 @@ DEBUG=false
 logged_user=$(logname)
 device="sda1"
 hdd_name="picapsule"
-mount_point="/media/${logged_user}/${hdd_name}"
+mount_point="/media/picapsule/${hdd_name}"
 
 print_usage() {
     echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
@@ -101,10 +101,10 @@ mount_device() {
 }
 
 configure_netatalk() {
-    log_debug "Configuring netatalk with HDD name ${hdd_name} and default user ${logged_user}"
+    log_debug "Configuring netatalk with HDD name ${hdd_name} and user picapsule"
 
     local afp_conf_content="[PiCapsule]
-path = /media/${logged_user}/${hdd_name}
+path = /media/picapsule/${hdd_name}
 time machine = yes
 valid users = @picapsule
 unix priv = no
@@ -209,7 +209,7 @@ main() {
             --hdd-name)
                 shift
                 hdd_name="$1"
-                mount_point="/media/${logged_user}/${hdd_name}"
+                mount_point="/media/picapsule/${hdd_name}"
                 ;;
             --uninstall)
                 uninstall_mode=true
