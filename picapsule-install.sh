@@ -7,6 +7,7 @@ logged_user=$(logname)
 device="sda1"
 hdd_name="picapsule"
 mount_point="/media/picapsule/${hdd_name}"
+picapsule_pwd="changeme"
 
 print_usage() {
     echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
@@ -46,7 +47,7 @@ check_dependencies() {
 install_utilities() {
     log_debug "Installing required utilities"
     if ! dpkg -s exfat-fuse exfat-utils netatalk &> /dev/null; then
-        sudo apt-get install -y exfat-fuse exfat-utils netatalk
+        apt-get install -y exfat-fuse exfat-utils netatalk
     else
         log_debug "Required utilities are already installed"
     fi
@@ -54,8 +55,8 @@ install_utilities() {
 
 format_hdd_exfat() {
     log_debug "Formatting HDD with exFAT on ${device}"
-    if ! sudo blkid "/dev/${device}" | grep -q exfat; then
-        sudo mkfs.exfat "/dev/${device}"
+    if ! blkid "/dev/${device}" | grep -q exfat; then
+        mkfs.exfat "/dev/${device}"
     else
         log_debug "HDD is already formatted with exFAT"
     fi
@@ -67,10 +68,10 @@ configure_automount() {
     local fstab_entry
     fstab_entry="/dev/${device} ${mount_point} exfat defaults,uid=$(id -u picapsule),gid=$(id -g picapsule),umask=002 0 0"
     if grep -q "/dev/${device}" /etc/fstab; then
-        sudo sed -i "\|/dev/${device}|c\\${fstab_entry}" /etc/fstab
+        sed -i "\|/dev/${device}|c\\${fstab_entry}" /etc/fstab
         log_debug "Updated existing fstab entry for device ${device}"
     else
-        echo "${fstab_entry}" | sudo tee -a /etc/fstab
+        echo "${fstab_entry}" | tee -a /etc/fstab
         log_debug "Added new fstab entry for device ${device}"
     fi
 
@@ -81,23 +82,24 @@ mount_device() {
 
     if mountpoint -q "${mount_point}"; then
         log_debug "Device is already mounted at ${mount_point}, unmounting first"
-        sudo umount "${mount_point}"
+        umount "${mount_point}"
     fi
 
     if [[ ! -d "${mount_point}" ]]; then
         log_debug "Creating mount point directory at ${mount_point}"
-        sudo mkdir -p "${mount_point}"
+        mkdir -p "${mount_point}"
     else
         log_debug "Mount point directory already exists at ${mount_point}"
     fi
 
-
-    sudo chown "picapsule:picapsule" "${mount_point}"
-    sudo chmod 775 "${mount_point}"
+    chown "picapsule:picapsule" "${mount_point}"
+    chmod 775 "${mount_point}"
 
     log_debug "Reloading systemd daemon"
-    sudo systemctl daemon-reload
-
+    systemctl daemon-reload
+    
+    log_debug "Mounting device at ${mount_point}"
+    mount "${mount_point}"
 }
 
 configure_netatalk() {
@@ -112,11 +114,11 @@ file perm = 0775
 directory perm = 0775"
 
     if grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
-        sudo sed -i "/\[PiCapsule\]/,/^\s*\[/{//!d;}" /etc/netatalk/afp.conf
-        sudo sed -i "/\[PiCapsule\]/r /dev/stdin" /etc/netatalk/afp.conf <<< "${afp_conf_content}"
+        sed -i "/\[PiCapsule\]/,/^\s*\[/{//!d;}" /etc/netatalk/afp.conf
+        sed -i "/\[PiCapsule\]/r /dev/stdin" /etc/netatalk/afp.conf <<< "${afp_conf_content}"
         log_debug "Updated existing netatalk configuration for PiCapsule"
     else
-        echo "${afp_conf_content}" | sudo tee -a /etc/netatalk/afp.conf
+        echo "${afp_conf_content}" | tee -a /etc/netatalk/afp.conf
         log_debug "Added new netatalk configuration for PiCapsule"
     fi
 }
@@ -130,64 +132,64 @@ After=multi-user.target
 
 [Service]
 Type=idle
-ExecStart=/bin/bash -c \"sleep 10; echo 'restart netatalk service'; sudo service netatalk restart\"
+ExecStart=/bin/bash -c \"sleep 10; echo 'restart netatalk service'; service netatalk restart\"
 
 [Install]
 WantedBy=multi-user.target"
 
-    echo "${service_content}" | sudo tee /etc/systemd/system/restart-netatalk.service
-    sudo systemctl enable restart-netatalk.service --now
-    sudo systemctl daemon-reload
+    echo "${service_content}" | tee /etc/systemd/system/restart-netatalk.service
+    systemctl enable restart-netatalk.service --now
+    systemctl daemon-reload
     log_debug "Enabled and started restart-netatalk.service"
 
-    if sudo systemctl is-active --quiet restart-netatalk.service; then
+    if systemctl is-active --quiet restart-netatalk.service; then
         log_debug "restart-netatalk.service is already running, restarting it"
-        sudo systemctl restart restart-netatalk.service
+        systemctl restart restart-netatalk.service
     else
         log_debug "restart-netatalk.service is not running, starting it"
-        sudo systemctl start restart-netatalk.service
+        systemctl start restart-netatalk.service
     fi
     log_debug "Confirming if restart-netatalk.service is restarting the netatalk service"
-    if ! sudo systemctl is-active --quiet restart-netatalk.service; then
+    if ! systemctl is-active --quiet restart-netatalk.service; then
         log_debug "restart-netatalk.service is not active, waiting for it to start"
         sleep 10
     fi
-    sudo systemctl status restart-netatalk.service
+    systemctl status restart-netatalk.service
 }
 
 uninstall() {
     log_debug "Disabling and removing restart-netatalk.service"
-    if sudo systemctl is-enabled restart-netatalk.service &> /dev/null; then
-        sudo systemctl disable restart-netatalk.service --now
-        sudo rm /etc/systemd/system/restart-netatalk.service
-        sudo systemctl daemon-reload
+    if systemctl is-enabled restart-netatalk.service &> /dev/null; then
+        systemctl disable restart-netatalk.service --now
+        rm /etc/systemd/system/restart-netatalk.service
+        systemctl daemon-reload
     else
         log_debug "restart-netatalk.service is not enabled"
     fi
 
     log_debug "Removing netatalk configuration"
     if grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
-        sudo sed -i '/\[PiCapsule\]/,/^$/d' /etc/netatalk/afp.conf
+        sed -i '/\[PiCapsule\]/,/^$/d' /etc/netatalk/afp.conf
     else
         log_debug "Netatalk configuration for PiCapsule not found"
     fi
 
     log_debug "Uninstalling utilities"
-    sudo apt-get remove --purge -y exfat-fuse exfat-utils netatalk
+    apt-get remove --purge -y exfat-fuse exfat-utils netatalk
 }
 
-create_user() {
+create_picapsule_user() {
     log_debug "Checking if user 'picapsule' exists"
     if ! id -u picapsule &>/dev/null; then
         log_debug "Creating user 'picapsule' with password 'changeme'"
-        sudo useradd -m picapsule
-        echo "picapsule:changeme" | sudo chpasswd
+        useradd -m picapsule
+        echo "picapsule:${picapsule_pwd}" | chpasswd
     else
         log_debug "User 'picapsule' already exists"
     fi
 
     log_debug "Adding logged user '${logged_user}' to 'picapsule' group"
-    sudo usermod -aG picapsule "${logged_user}"
+    usermod -aG picapsule "${logged_user}"
 }
 
 main() {
@@ -228,7 +230,7 @@ main() {
         exit 0
     fi
 
-    create_user
+    create_picapsule_user
     check_device
     check_dependencies
     install_utilities
