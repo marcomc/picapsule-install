@@ -137,35 +137,28 @@ configure_netatalk() {
     log_verbose "Configuring netatalk with HDD name ${hdd_name} and user picapsule"
 
     local afp_conf_content
-    afp_conf_content=$(cat <<EOF
-[PiCapsule]
+    afp_conf_content="[PiCapsule]
 path = /media/picapsule/${hdd_name}
 time machine = yes
 valid users = @picapsule
 unix priv = no
 file perm = 0775
-directory perm = 0775
-EOF
-)
-    tmpfile=$(mktemp)
-    echo "${afp_conf_content}" > "${tmpfile}"
-    
+directory perm = 0775"
+
+    # Remove all lines between [PiCapsule] and the next section header (empty line or new section header)
     if grep -F -q "[PiCapsule]" /etc/netatalk/afp.conf; then
-        # Remove all lines between [PiCapsule] and the next section header (empty line or new section header)
         sed -i '/\[PiCapsule\]/,/^$/d' /etc/netatalk/afp.conf
     fi
-    
+
     # Append the new configuration content
-    cat "${tmpfile}" >> /etc/netatalk/afp.conf
+    echo "${afp_conf_content}" >> /etc/netatalk/afp.conf
     log_verbose "Updated netatalk configuration for PiCapsule"
-    
-    rm -f "${tmpfile}"
 }
 
 enable_restart_script() {
     log_verbose "Creating restart-netatalk.service file"
-
-    local service_content="[Unit]
+    local service_content
+    service_content="[Unit]
 Description=Restart Netatalk Service
 After=multi-user.target
 
@@ -175,8 +168,7 @@ ExecStart=/bin/bash -c \"sleep 10; echo 'restart netatalk service'; service neta
 
 [Install]
 WantedBy=multi-user.target"
-
-    echo "${service_content}" | tee /etc/systemd/system/restart-netatalk.service
+    cat "${service_content}" >> /etc/systemd/system/restart-netatalk.service
     systemctl enable restart-netatalk.service --now
     systemctl daemon-reload
     log_verbose "Enabled and started restart-netatalk.service"
