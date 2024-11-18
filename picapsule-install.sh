@@ -222,14 +222,17 @@ uninstall() {
         log_verbose "User 'picapsule' does not exist"
     fi
 
-    log_verbose "Removing group 'picapsule' if it has no other members"
+    log_verbose "Removing group 'picapsule' and disassociating other members"
     if getent group picapsule &>/dev/null; then
-        if [[ $(getent group picapsule | awk -F: '{print $4}') == "" ]]; then
-            groupdel picapsule
-            log_verbose "Group 'picapsule' removed successfully" "success"
-        else
-            log_verbose "Group 'picapsule' has other members, not removing" "fail"
+        members=$(getent group picapsule | awk -F: '{print $4}')
+        if [[ -n "${members}" ]]; then
+            for member in ${members//,/ }; do
+                gpasswd -d "${member}" picapsule
+                log_verbose "Removed user '${member}' from group 'picapsule'" "success"
+            done
         fi
+        groupdel picapsule
+        log_verbose "Group 'picapsule' removed successfully" "success"
     else
         log_verbose "Group 'picapsule' does not exist"
     fi
