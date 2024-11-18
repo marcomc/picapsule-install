@@ -74,9 +74,6 @@ configure_automount() {
         log_debug "Added new fstab entry for device ${device}"
     fi
 
-    sudo mkdir -p "${mount_point}"
-    sudo chown "picapsule:picapsule" "${mount_point}"
-    sudo chmod 775 "${mount_point}"
 }
 
 mount_device() {
@@ -93,6 +90,7 @@ mount_device() {
     else
         log_debug "Mount point directory already exists at ${mount_point}"
     fi
+
 
     sudo chown "picapsule:picapsule" "${mount_point}"
     sudo chmod 775 "${mount_point}"
