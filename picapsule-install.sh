@@ -2,32 +2,34 @@
 
 set -euo pipefail
 
-DEBUG=false
+VERBOSE=true
 logged_user=$(logname)
 device="sda1"
 hdd_name="picapsule"
 mount_point="/media/picapsule/${hdd_name}"
 picapsule_pwd="changeme"
+picapsule_uid=""
+picapsule_gid=""
 
 print_usage() {
-    echo "Usage: $0 [-h|--help] [--debug] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
+    echo "Usage: $0 [-h|--help] [-q|--quiet] [--device <device>] [--hdd-name <hdd_name>] [--uninstall]"
     echo "Options:"
     echo "  -h, --help    Show this help message and exit"
-    echo "  --debug       Enable debug mode"
+    echo "  -q, --quiet   Disable verbose mode"
     echo "  --device      Specify the device to format (default: sda1)"
     echo "  --hdd-name    Specify the HDD name (default: picapsule)"
     echo "  --uninstall   Uninstall and remove all configurations"
 }
 
-log_debug() {
+log_verbose() {
     local message="$1"
-    if [[ "${DEBUG}" == "true" ]]; then
-        echo "DEBUG: ${message}" >&2
+    if [[ "${VERBOSE}" == "true" ]]; then
+        echo "VERBOSE: ${message}" >&2
     fi
 }
 
 check_device() {
-    log_debug "Checking if device ${device} is recognized by the operating system"
+    log_verbose "Checking if device ${device} is recognized by the operating system"
     if [[ ! -b "/dev/${device}" ]]; then
         echo "Error: Device /dev/${device} is not recognized by the operating system." >&2
         exit 1
@@ -45,65 +47,65 @@ check_dependencies() {
 }
 
 install_utilities() {
-    log_debug "Installing required utilities"
+    log_verbose "Installing required utilities"
     if ! dpkg -s exfat-fuse exfat-utils netatalk &> /dev/null; then
         apt-get install -y exfat-fuse exfat-utils netatalk
     else
-        log_debug "Required utilities are already installed"
+        log_verbose "Required utilities are already installed"
     fi
 }
 
 format_hdd_exfat() {
-    log_debug "Formatting HDD with exFAT on ${device}"
+    log_verbose "Formatting HDD with exFAT on ${device}"
     if ! blkid "/dev/${device}" | grep -q exfat; then
         mkfs.exfat "/dev/${device}"
     else
-        log_debug "HDD is already formatted with exFAT"
+        log_verbose "HDD is already formatted with exFAT"
     fi
 }
 
 configure_automount() {
-    log_debug "Configuring automount for device ${device} at ${mount_point}"
+    log_verbose "Configuring automount for device ${device} at ${mount_point}"
 
     local fstab_entry
-    fstab_entry="/dev/${device} ${mount_point} exfat defaults,uid=$(id -u picapsule),gid=$(id -g picapsule),umask=002 0 0"
+    fstab_entry="/dev/${device} ${mount_point} exfat defaults,uid=${picapsule_uid},gid=${picapsule_gid},umask=002 0 0"
     if grep -q "/dev/${device}" /etc/fstab; then
         sed -i "\|/dev/${device}|c\\${fstab_entry}" /etc/fstab
-        log_debug "Updated existing fstab entry for device ${device}"
+        log_verbose "Updated existing fstab entry for device ${device}"
     else
         echo "${fstab_entry}" | tee -a /etc/fstab
-        log_debug "Added new fstab entry for device ${device}"
+        log_verbose "Added new fstab entry for device ${device}"
     fi
 
 }
 
 mount_device() {
-    log_debug "Mounting device using fstab configuration at ${mount_point}"
+    log_verbose "Mounting device using fstab configuration at ${mount_point}"
 
     if mountpoint -q "${mount_point}"; then
-        log_debug "Device is already mounted at ${mount_point}, unmounting first"
+        log_verbose "Device is already mounted at ${mount_point}, unmounting first"
         umount "${mount_point}"
     fi
 
     if [[ ! -d "${mount_point}" ]]; then
-        log_debug "Creating mount point directory at ${mount_point}"
+        log_verbose "Creating mount point directory at ${mount_point}"
         mkdir -p "${mount_point}"
     else
-        log_debug "Mount point directory already exists at ${mount_point}"
+        log_verbose "Mount point directory already exists at ${mount_point}"
     fi
 
     chown "picapsule:picapsule" "${mount_point}"
     chmod 775 "${mount_point}"
 
-    log_debug "Reloading systemd daemon"
+    log_verbose "Reloading systemd daemon"
     systemctl daemon-reload
     
-    log_debug "Mounting device at ${mount_point}"
+    log_verbose "Mounting device at ${mount_point}"
     mount "${mount_point}"
 }
 
 configure_netatalk() {
-    log_debug "Configuring netatalk with HDD name ${hdd_name} and user picapsule"
+    log_verbose "Configuring netatalk with HDD name ${hdd_name} and user picapsule"
 
     local afp_conf_content="[PiCapsule]
 path = /media/picapsule/${hdd_name}
@@ -116,15 +118,15 @@ directory perm = 0775"
     if grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
         sed -i "/\[PiCapsule\]/,/^\s*\[/{//!d;}" /etc/netatalk/afp.conf
         sed -i "/\[PiCapsule\]/r /dev/stdin" /etc/netatalk/afp.conf <<< "${afp_conf_content}"
-        log_debug "Updated existing netatalk configuration for PiCapsule"
+        log_verbose "Updated existing netatalk configuration for PiCapsule"
     else
         echo "${afp_conf_content}" | tee -a /etc/netatalk/afp.conf
-        log_debug "Added new netatalk configuration for PiCapsule"
+        log_verbose "Added new netatalk configuration for PiCapsule"
     fi
 }
 
 enable_restart_script() {
-    log_debug "Creating restart-netatalk.service file"
+    log_verbose "Creating restart-netatalk.service file"
 
     local service_content="[Unit]
 Description=Restart Netatalk Service
@@ -140,55 +142,58 @@ WantedBy=multi-user.target"
     echo "${service_content}" | tee /etc/systemd/system/restart-netatalk.service
     systemctl enable restart-netatalk.service --now
     systemctl daemon-reload
-    log_debug "Enabled and started restart-netatalk.service"
+    log_verbose "Enabled and started restart-netatalk.service"
 
     if systemctl is-active --quiet restart-netatalk.service; then
-        log_debug "restart-netatalk.service is already running, restarting it"
+        log_verbose "restart-netatalk.service is already running, restarting it"
         systemctl restart restart-netatalk.service
     else
-        log_debug "restart-netatalk.service is not running, starting it"
+        log_verbose "restart-netatalk.service is not running, starting it"
         systemctl start restart-netatalk.service
     fi
-    log_debug "Confirming if restart-netatalk.service is restarting the netatalk service"
+    log_verbose "Confirming if restart-netatalk.service is restarting the netatalk service"
     if ! systemctl is-active --quiet restart-netatalk.service; then
-        log_debug "restart-netatalk.service is not active, waiting for it to start"
+        log_verbose "restart-netatalk.service is not active, waiting for it to start"
         sleep 10
     fi
     systemctl status restart-netatalk.service
 }
 
 uninstall() {
-    log_debug "Disabling and removing restart-netatalk.service"
+    log_verbose "Disabling and removing restart-netatalk.service"
     if systemctl is-enabled restart-netatalk.service &> /dev/null; then
         systemctl disable restart-netatalk.service --now
         rm /etc/systemd/system/restart-netatalk.service
         systemctl daemon-reload
     else
-        log_debug "restart-netatalk.service is not enabled"
+        log_verbose "restart-netatalk.service is not enabled"
     fi
 
-    log_debug "Removing netatalk configuration"
+    log_verbose "Removing netatalk configuration"
     if grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
         sed -i '/\[PiCapsule\]/,/^$/d' /etc/netatalk/afp.conf
     else
-        log_debug "Netatalk configuration for PiCapsule not found"
+        log_verbose "Netatalk configuration for PiCapsule not found"
     fi
 
-    log_debug "Uninstalling utilities"
+    log_verbose "Uninstalling utilities"
     apt-get remove --purge -y exfat-fuse exfat-utils netatalk
 }
 
 create_picapsule_user() {
-    log_debug "Checking if user 'picapsule' exists"
+    log_verbose "Checking if user 'picapsule' exists"
     if ! id -u picapsule &>/dev/null; then
-        log_debug "Creating user 'picapsule' with password 'changeme'"
+        log_verbose "Creating user 'picapsule' with password 'changeme'"
         useradd -m picapsule
         echo "picapsule:${picapsule_pwd}" | chpasswd
     else
-        log_debug "User 'picapsule' already exists"
+        log_verbose "User 'picapsule' already exists"
     fi
 
-    log_debug "Adding logged user '${logged_user}' to 'picapsule' group"
+    picapsule_uid=$(id -u picapsule)
+    picapsule_gid=$(id -g picapsule)
+
+    log_verbose "Adding logged user '${logged_user}' to 'picapsule' group"
     usermod -aG picapsule "${logged_user}"
 }
 
@@ -201,8 +206,8 @@ main() {
                 print_usage
                 exit 0
                 ;;
-            --debug)
-                DEBUG=true
+            -q|--quiet)
+                VERBOSE=false
                 ;;
             --device)
                 shift
