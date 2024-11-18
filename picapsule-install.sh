@@ -95,8 +95,9 @@ mount_device() {
     sudo chown "picapsule:picapsule" "${mount_point}"
     sudo chmod 775 "${mount_point}"
 
-    log_debug "Mounting device at ${mount_point}"
-    sudo mount "${mount_point}"
+    log_debug "Reloading systemd daemon"
+    sudo systemctl daemon-reload
+
 }
 
 configure_netatalk() {
