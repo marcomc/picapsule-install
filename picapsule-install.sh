@@ -28,6 +28,23 @@ log_verbose() {
     fi
 }
 
+create_picapsule_user() {
+    log_verbose "Checking if user 'picapsule' exists"
+    if ! id -u picapsule &>/dev/null; then
+        log_verbose "Creating user 'picapsule' with password 'changeme'"
+        useradd -m picapsule
+        echo "picapsule:${picapsule_pwd}" | chpasswd
+    else
+        log_verbose "User 'picapsule' already exists"
+    fi
+
+    picapsule_uid=$(id -u picapsule)
+    picapsule_gid=$(id -g picapsule)
+
+    log_verbose "Adding logged user '${logged_user}' to 'picapsule' group"
+    usermod -aG picapsule "${logged_user}"
+}
+
 check_device() {
     log_verbose "Checking if device ${device} is recognized by the operating system"
     if [[ ! -b "/dev/${device}" ]]; then
@@ -76,7 +93,6 @@ configure_automount() {
         echo "${fstab_entry}" | tee -a /etc/fstab
         log_verbose "Added new fstab entry for device ${device}"
     fi
-
 }
 
 mount_device() {
@@ -157,23 +173,6 @@ WantedBy=multi-user.target"
         sleep 10
     fi
     systemctl status restart-netatalk.service
-}
-
-create_picapsule_user() {
-    log_verbose "Checking if user 'picapsule' exists"
-    if ! id -u picapsule &>/dev/null; then
-        log_verbose "Creating user 'picapsule' with password 'changeme'"
-        useradd -m picapsule
-        echo "picapsule:${picapsule_pwd}" | chpasswd
-    else
-        log_verbose "User 'picapsule' already exists"
-    fi
-
-    picapsule_uid=$(id -u picapsule)
-    picapsule_gid=$(id -g picapsule)
-
-    log_verbose "Adding logged user '${logged_user}' to 'picapsule' group"
-    usermod -aG picapsule "${logged_user}"
 }
 
 uninstall() {
