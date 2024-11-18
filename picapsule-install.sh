@@ -159,6 +159,23 @@ WantedBy=multi-user.target"
     systemctl status restart-netatalk.service
 }
 
+create_picapsule_user() {
+    log_verbose "Checking if user 'picapsule' exists"
+    if ! id -u picapsule &>/dev/null; then
+        log_verbose "Creating user 'picapsule' with password 'changeme'"
+        useradd -m picapsule
+        echo "picapsule:${picapsule_pwd}" | chpasswd
+    else
+        log_verbose "User 'picapsule' already exists"
+    fi
+
+    picapsule_uid=$(id -u picapsule)
+    picapsule_gid=$(id -g picapsule)
+
+    log_verbose "Adding logged user '${logged_user}' to 'picapsule' group"
+    usermod -aG picapsule "${logged_user}"
+}
+
 uninstall() {
     log_verbose "Disabling and removing restart-netatalk.service"
     if systemctl is-enabled restart-netatalk.service &> /dev/null; then
@@ -178,23 +195,19 @@ uninstall() {
 
     log_verbose "Uninstalling utilities"
     apt-get remove --purge -y exfat-fuse exfat-utils netatalk
-}
 
-create_picapsule_user() {
-    log_verbose "Checking if user 'picapsule' exists"
-    if ! id -u picapsule &>/dev/null; then
-        log_verbose "Creating user 'picapsule' with password 'changeme'"
-        useradd -m picapsule
-        echo "picapsule:${picapsule_pwd}" | chpasswd
-    else
-        log_verbose "User 'picapsule' already exists"
+    log_verbose "Removing mount point directory at ${mount_point}"
+    if mountpoint -q "${mount_point}"; then
+        umount "${mount_point}"
     fi
+    rm -rf "${mount_point}"
 
-    picapsule_uid=$(id -u picapsule)
-    picapsule_gid=$(id -g picapsule)
-
-    log_verbose "Adding logged user '${logged_user}' to 'picapsule' group"
-    usermod -aG picapsule "${logged_user}"
+    log_verbose "Removing user 'picapsule'"
+    if id -u picapsule &>/dev/null; then
+        userdel -r picapsule
+    else
+        log_verbose "User 'picapsule' does not exist"
+    fi
 }
 
 main() {
