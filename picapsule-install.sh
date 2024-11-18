@@ -136,15 +136,17 @@ mount_device() {
 configure_netatalk() {
     log_verbose "Configuring netatalk with HDD name ${hdd_name} and user picapsule"
 
-    local afp_conf_content="[PiCapsule]
+    local afp_conf_content=$(cat <<EOF
+[PiCapsule]
 path = /media/picapsule/${hdd_name}
 time machine = yes
 valid users = @picapsule
 unix priv = no
 file perm = 0775
-directory perm = 0775"
-
-    if grep -q "[PiCapsule]" /etc/netatalk/afp.conf; then
+directory perm = 0775
+EOF
+)
+    if grep -F -q "[PiCapsule]" /etc/netatalk/afp.conf; then
         sed -i "/\[PiCapsule\]/,/^\s*\[/{//!d;}" /etc/netatalk/afp.conf
         sed -i "/\[PiCapsule\]/r /dev/stdin" /etc/netatalk/afp.conf <<< "${afp_conf_content}"
         log_verbose "Updated existing netatalk configuration for PiCapsule"
