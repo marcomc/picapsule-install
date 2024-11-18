@@ -217,8 +217,21 @@ uninstall() {
     log_verbose "Removing user 'picapsule'"
     if id -u picapsule &>/dev/null; then
         userdel -r picapsule
+        log_verbose "User 'picapsule' removed successfully" "success"
     else
         log_verbose "User 'picapsule' does not exist"
+    fi
+
+    log_verbose "Removing group 'picapsule' if it has no other members"
+    if getent group picapsule &>/dev/null; then
+        if [[ $(getent group picapsule | awk -F: '{print $4}') == "" ]]; then
+            groupdel picapsule
+            log_verbose "Group 'picapsule' removed successfully" "success"
+        else
+            log_verbose "Group 'picapsule' has other members, not removing" "fail"
+        fi
+    else
+        log_verbose "Group 'picapsule' does not exist"
     fi
 }
 
