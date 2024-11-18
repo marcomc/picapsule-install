@@ -16,9 +16,7 @@ sudo apt-get upgrade -y
 To download and execute the `picapsule-install.sh` script directly from GitHub, use the following command:
 
 ```sh
-curl -o picapsule-install.sh https://raw.githubusercontent.com/marcomc/picapsule-install/main/picapsule-install.sh
-chmod +x picapsule-install.sh
-sudo ./picapsule-install.sh
+sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/marcomc/picapsule-install/main/picapsule-install.sh)"
 ```
 
 ## Options
