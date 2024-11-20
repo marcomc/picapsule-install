@@ -19,6 +19,14 @@ To download and execute the `picapsule-install.sh` script directly from GitHub, 
 sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/marcomc/picapsule-install/main/picapsule-install.sh)"
 ```
 
+## Undo Changes
+
+To undo the changes made by the script, use the following command:
+
+```sh
+sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/marcomc/picapsule-install/main/picapsule-install.sh)" -- --uninstall
+```
+
 ## Options
 
 - `-h, --help`: Show the help message and exit.

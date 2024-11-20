@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"name": "picapsule-install",
+			"path": "."
+		},
+		{
+			"name": "ansible-picapsule",
+			"path": "../../ansible/ansible-picapsule"
+		},
+		{
+			"name": "dnscrypt-proxy-install",
+			"path": "../dnscrypt-proxy-install"
+		},
+		{
+			"path": "../picapsule-setup"
+		}
+	],
+	"settings": {}
+}
